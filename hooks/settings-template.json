@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /ABSOLUTE/PATH/TO/hooks/secret-scanner.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /ABSOLUTE/PATH/TO/hooks/dangerous-command-blocker.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /ABSOLUTE/PATH/TO/hooks/audit-logger.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

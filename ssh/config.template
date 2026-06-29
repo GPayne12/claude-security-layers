@@ -1,0 +1,37 @@
+# SSH client hardening for multi-device AI dev setups.
+#
+# Place at ~/.ssh/config (chmod 600).
+# Adjust Host blocks to match your environment.
+#
+# Core principles:
+#   ForwardAgent no  — prevents key relay via agent socket if secondary device is compromised
+#   IdentitiesOnly yes — prevents SSH from trying all loaded identities; uses only what's specified
+
+# ── Global defaults ───────────────────────────────────────────────────────────
+
+Host *
+    ForwardAgent no
+    IdentitiesOnly yes
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    # Require host key verification — never auto-accept unknown hosts
+    StrictHostKeyChecking ask
+
+# ── Primary workstation (trusted, named) ─────────────────────────────────────
+
+Host primary
+    HostName 100.94.123.112          # Replace with your Tailscale IP or hostname
+    User george                       # Replace with your username
+    IdentityFile ~/.ssh/id_ed25519
+    ForwardAgent no
+
+# ── Example: dedicated mobile node key ───────────────────────────────────────
+# A separate key for phone/tablet access with a restricted shell on the server.
+# The server's authorized_keys entry uses command= to limit what the key can do.
+# See ../mobile/README.md for the authorized_keys pattern.
+
+# Host mobile-access
+#     HostName 100.94.123.112
+#     User george
+#     IdentityFile ~/.ssh/id_ed25519_mobile
+#     ForwardAgent no
