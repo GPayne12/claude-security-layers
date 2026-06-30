@@ -9,7 +9,7 @@ These scripts verify that security controls are **actually working**, not just p
 ./audit.sh
 
 # Remote machine (via SSH)
-./audit.sh --remote george@primary
+./audit.sh --remote <user>@primary
 ```
 
 ## Individual checks

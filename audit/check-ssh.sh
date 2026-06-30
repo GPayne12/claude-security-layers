@@ -11,8 +11,8 @@ if [ ! -f "$SSH_CONFIG" ]; then
 fi
 
 # Check that ForwardAgent no appears and is not overridden by ForwardAgent yes
-YES_COUNT=$(grep -ci "ForwardAgent yes" "$SSH_CONFIG" 2>/dev/null || echo 0)
-NO_COUNT=$(grep -ci "ForwardAgent no"  "$SSH_CONFIG" 2>/dev/null || echo 0)
+YES_COUNT=$(grep -ci "ForwardAgent yes" "$SSH_CONFIG" 2>/dev/null) || YES_COUNT=0
+NO_COUNT=$(grep -ci "ForwardAgent no"  "$SSH_CONFIG" 2>/dev/null) || NO_COUNT=0
 
 if [ "$YES_COUNT" -gt 0 ]; then
     echo "ForwardAgent yes found in $SSH_CONFIG — this allows key relay if the remote is compromised"

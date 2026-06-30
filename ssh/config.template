@@ -20,8 +20,8 @@ Host *
 # ── Primary workstation (trusted, named) ─────────────────────────────────────
 
 Host primary
-    HostName 100.94.123.112          # Replace with your Tailscale IP or hostname
-    User george                       # Replace with your username
+    HostName YOUR_TAILSCALE_IP        # Replace with your Tailscale IP or hostname
+    User YOUR_USERNAME                # Replace with your username
     IdentityFile ~/.ssh/id_ed25519
     ForwardAgent no
 
@@ -31,7 +31,7 @@ Host primary
 # See ../mobile/README.md for the authorized_keys pattern.
 
 # Host mobile-access
-#     HostName 100.94.123.112
-#     User george
+#     HostName YOUR_TAILSCALE_IP
+#     User YOUR_USERNAME
 #     IdentityFile ~/.ssh/id_ed25519_mobile
 #     ForwardAgent no
