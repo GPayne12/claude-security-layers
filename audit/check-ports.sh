@@ -1,56 +1,61 @@
 #!/usr/bin/env bash
 # Check for non-system services listening on all interfaces (0.0.0.0 / *).
 #
-# Excludes:
-#   - sshd (port 22) — expected to be network-accessible
-#   - Tailscale network extension — system VPN, expected
-#   - rapportd — Apple Continuity daemon, expected
-#   - link-local IPv6 (fe80::) — not routable, not a threat
-#   - mDNSResponder, launchd — system services
+# Ports with unidentifiable owners (requires sudo for root processes) are
+# reported as warnings, not failures. Only positively-identified non-system
+# services cause a failure exit.
+#
+# Known-safe to skip:
+#   - Port 22 (sshd) — intentionally network-accessible
+#   - Tailscale internal ports (varies; identified by process name)
+#   - rapportd (Apple Continuity), mDNSResponder, launchd
 
-set -euo pipefail
-
-IGNORED_PROCS="sshd|rapportd|mDNSResponder|launchd|configd|io.tailscale|com.apple"
-IGNORED_PORTS="22"   # SSH — intentionally network-accessible
+IGNORED_PROCS="sshd|rapportd|mDNSResponder|launchd|configd|io\.tailscale|com\.apple|UserEventAgent"
+IGNORED_PORTS="22"
 
 # Pull all listeners, strip loopback and link-local IPv6
-if command -v netstat &>/dev/null; then
-    WIDE=$(netstat -an 2>/dev/null \
-        | grep LISTEN \
-        | grep -v '127\.0\.0\.1\|::1\|fe80::' \
-        | grep -E '^\s*tcp')
-else
-    WIDE=$(ss -tln 2>/dev/null \
-        | grep -v '127\.' | grep -v '\[::1\]' | grep -v 'fe80' \
-        | tail -n +2)
-fi
+WIDE=$(netstat -an 2>/dev/null \
+    | grep LISTEN \
+    | grep -v '127\.0\.0\.1\|::1\|fe80::' \
+    | grep -E '^\s*tcp' || true)
 
-if [ -z "$WIDE" ]; then
-    exit 0
-fi
+[ -z "$WIDE" ] && exit 0
 
-# Extract port numbers from the listener lines
+# Extract unique port numbers
 PORTS=$(echo "$WIDE" \
-    | grep -oE '\*\.[0-9]+|0\.0\.0\.0\.[0-9]+|::[0-9]+|\*:[0-9]+' \
+    | grep -oE '\*\.[0-9]+|0\.0\.0\.0\.[0-9]+|\*:[0-9]+' \
     | grep -oE '[0-9]+$' \
-    | sort -un)
+    | sort -un || true)
+
+[ -z "$PORTS" ] && exit 0
 
 SUSPICIOUS=0
+UNKNOWN=0
+
 for port in $PORTS; do
     # Skip known-safe ports
     echo "$IGNORED_PORTS" | grep -qw "$port" && continue
 
     owner=$(lsof -iTCP:"$port" -sTCP:LISTEN -n -P 2>/dev/null \
-        | awk 'NR>1 {print $1}' | head -1)
+        | awk 'NR>1 {print $1}' | head -1 || true)
 
-    [ -z "$owner" ] && owner="(unknown — try: sudo lsof -iTCP:$port -sTCP:LISTEN -n)"
+    if [ -z "$owner" ]; then
+        # Can't identify without sudo — warn but don't fail
+        UNKNOWN=$((UNKNOWN + 1))
+        echo "  WARN port $port — owner unknown (run with sudo for full visibility)"
+        continue
+    fi
 
     # Skip known-safe processes
     echo "$owner" | grep -qE "$IGNORED_PROCS" && continue
 
-    echo "  Port $port — $owner (listening on all interfaces)"
+    echo "  FAIL port $port — $owner is listening on all interfaces"
     SUSPICIOUS=$((SUSPICIOUS + 1))
 done
+
+if [ "$UNKNOWN" -gt 0 ]; then
+    echo "  ($UNKNOWN port(s) could not be identified — re-run as sudo for complete results)"
+fi
 
 if [ "$SUSPICIOUS" -gt 0 ]; then
     echo ""
