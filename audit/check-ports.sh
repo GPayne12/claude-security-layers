@@ -10,7 +10,9 @@
 #   - Tailscale internal ports (varies; identified by process name)
 #   - rapportd (Apple Continuity), mDNSResponder, launchd
 
-IGNORED_PROCS="sshd|rapportd|mDNSResponder|launchd|configd|io\.tailscale|com\.apple|UserEventAgent"
+# ControlCe = macOS AirPlay Receiver (ports 5000/7000) — Apple system feature.
+# Disable in System Settings > General > AirPlay & Handoff if not needed.
+IGNORED_PROCS="sshd|rapportd|mDNSResponder|launchd|configd|io\.tailscale|com\.apple|UserEventAgent|ControlCe"
 IGNORED_PORTS="22"
 
 # Pull all listeners, strip loopback and link-local IPv6

@@ -9,6 +9,7 @@
 #     "command": "bash /path/to/audit-logger.sh" }] }]
 
 AUDIT_LOG="${AUDIT_LOG:-$HOME/.claude/audit.log}"
+umask 077
 mkdir -p "$(dirname "$AUDIT_LOG")"
 
 TOOL=$(cat | /usr/bin/jq -r '.tool_name // "unknown"' 2>/dev/null)
