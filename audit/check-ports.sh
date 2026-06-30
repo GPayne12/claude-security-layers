@@ -1,46 +1,60 @@
 #!/usr/bin/env bash
-# Check for services listening on all interfaces (0.0.0.0 / :: / *).
-# Flags any port bound to a network interface rather than loopback only.
+# Check for non-system services listening on all interfaces (0.0.0.0 / *).
 #
-# Excludes known system services (mDNS :5353, rapportd, Tailscale internals).
+# Excludes:
+#   - sshd (port 22) — expected to be network-accessible
+#   - Tailscale network extension — system VPN, expected
+#   - rapportd — Apple Continuity daemon, expected
+#   - link-local IPv6 (fe80::) — not routable, not a threat
+#   - mDNSResponder, launchd — system services
 
 set -euo pipefail
 
-IGNORED_PROCS="rapportd|mDNSResponder|launchd|configd"
+IGNORED_PROCS="sshd|rapportd|mDNSResponder|launchd|configd|io.tailscale|com.apple"
+IGNORED_PORTS="22"   # SSH — intentionally network-accessible
 
-# Ports bound to all interfaces
+# Pull all listeners, strip loopback and link-local IPv6
 if command -v netstat &>/dev/null; then
-    WIDE=$(netstat -an 2>/dev/null | grep LISTEN | grep -v '127\.0\.0\.1\|::1' | grep -E '^\s*tcp')
+    WIDE=$(netstat -an 2>/dev/null \
+        | grep LISTEN \
+        | grep -v '127\.0\.0\.1\|::1\|fe80::' \
+        | grep -E '^\s*tcp')
 else
-    WIDE=$(ss -tln 2>/dev/null | grep -v '127\.' | grep -v '\[::1\]' | tail -n +2)
+    WIDE=$(ss -tln 2>/dev/null \
+        | grep -v '127\.' | grep -v '\[::1\]' | grep -v 'fe80' \
+        | tail -n +2)
 fi
 
 if [ -z "$WIDE" ]; then
     exit 0
 fi
 
-# Try to identify the owning process for each flagged port
-echo "Services listening on all interfaces:"
-echo "$WIDE"
-echo ""
-
-# Use lsof to get process names (best effort, may need sudo for all processes)
-PORTS=$(echo "$WIDE" | grep -oE '\*\.[0-9]+|0\.0\.0\.0\.[0-9]+|::[0-9]+' | grep -oE '[0-9]+$' | sort -u)
+# Extract port numbers from the listener lines
+PORTS=$(echo "$WIDE" \
+    | grep -oE '\*\.[0-9]+|0\.0\.0\.0\.[0-9]+|::[0-9]+|\*:[0-9]+' \
+    | grep -oE '[0-9]+$' \
+    | sort -un)
 
 SUSPICIOUS=0
 for port in $PORTS; do
-    owner=$(lsof -iTCP:"$port" -sTCP:LISTEN -n -P 2>/dev/null | awk 'NR>1 {print $1}' | head -1)
-    if [ -z "$owner" ]; then
-        owner="(unknown — try: sudo lsof -iTCP:$port)"
-    fi
-    if echo "$owner" | grep -qvE "$IGNORED_PROCS"; then
-        echo "  Port $port — $owner"
-        SUSPICIOUS=$((SUSPICIOUS + 1))
-    fi
+    # Skip known-safe ports
+    echo "$IGNORED_PORTS" | grep -qw "$port" && continue
+
+    owner=$(lsof -iTCP:"$port" -sTCP:LISTEN -n -P 2>/dev/null \
+        | awk 'NR>1 {print $1}' | head -1)
+
+    [ -z "$owner" ] && owner="(unknown — try: sudo lsof -iTCP:$port -sTCP:LISTEN -n)"
+
+    # Skip known-safe processes
+    echo "$owner" | grep -qE "$IGNORED_PROCS" && continue
+
+    echo "  Port $port — $owner (listening on all interfaces)"
+    SUSPICIOUS=$((SUSPICIOUS + 1))
 done
 
 if [ "$SUSPICIOUS" -gt 0 ]; then
     echo ""
-    echo "Consider binding these services to 127.0.0.1 unless remote access is required."
+    echo "These services are reachable from any network interface, including Tailscale."
+    echo "Consider binding to 127.0.0.1 unless remote access is required."
     exit 1
 fi
